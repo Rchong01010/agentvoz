@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { IMMERSION_LEVELS, getLessonsForLevel } from '../lib/curriculum';
+import { IMMERSION_LEVELS, getLessonsForLevel, LESSONS } from '../lib/curriculum';
 import { CONFIG } from '../lib/config';
+import { isLessonCompleted, getCompletedCountForLevel, getTotalCompleted } from '../lib/progress';
 
 export default function Lessons() {
   const navigate = useNavigate();
@@ -33,6 +34,20 @@ export default function Lessons() {
 
       <div className="max-w-2xl mx-auto px-6 py-8">
         {/* Dialect Selector */}
+        {/* Progress summary */}
+        <div className="mb-8 bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-zinc-300">Your Progress</p>
+            <p className="text-xs text-zinc-500 mt-0.5">{getTotalCompleted()} of {LESSONS.length} lessons completed</p>
+          </div>
+          <div className="w-32 h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+              style={{ width: `${(getTotalCompleted() / LESSONS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
         <div className="mb-10">
           <label className="block text-sm font-medium text-zinc-400 mb-3">
             Which Spanish?
@@ -88,7 +103,7 @@ export default function Lessons() {
                         {level.label}
                       </h2>
                       <span className="text-xs font-mono text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-md">
-                        L{level.id}
+                        {getCompletedCountForLevel(level.id, LESSONS)}/{lessons.length}
                       </span>
                     </div>
                     <p className={`text-sm font-medium text-transparent bg-clip-text bg-gradient-to-r ${level.color} mt-0.5`}>
@@ -142,16 +157,24 @@ export default function Lessons() {
                             )}
                           </div>
 
-                          {/* Arrow */}
-                          <svg
-                            className="w-4 h-4 text-zinc-700 group-hover:text-zinc-400 transition-colors flex-shrink-0 mt-0.5"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={2}
-                            stroke="currentColor"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                          </svg>
+                          {/* Completed check or arrow */}
+                          {isLessonCompleted(lesson.id) ? (
+                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center mt-0.5">
+                              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                            </div>
+                          ) : (
+                            <svg
+                              className="w-4 h-4 text-zinc-700 group-hover:text-zinc-400 transition-colors flex-shrink-0 mt-0.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={2}
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                            </svg>
+                          )}
                         </div>
                       </div>
                     </button>

@@ -108,8 +108,9 @@ export function useConversation() {
         if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
         let idx = 0;
         setKaraokeIndex(0);
-        // ~280ms per word — tuned for ElevenLabs Spanish speech rate
-        const msPerWord = Math.max(180, 280);
+        // ~330ms per word — tuned for ElevenLabs Spanish at 0.85x speed
+        // Slower speech = more time per word
+        const msPerWord = 330;
         karaokeTimerRef.current = setInterval(() => {
           idx++;
           if (idx >= words.length) {
@@ -133,11 +134,6 @@ export function useConversation() {
 
     // Listen for ALL message types to capture LLM text BEFORE speech
     vapi.on('message', (msg) => {
-      // Log all message types for debugging (remove later)
-      if (msg.type !== 'transcript') {
-        console.log('VAPI msg:', msg.type, msg);
-      }
-
       // Conversation update — fires BEFORE TTS, contains LLM response text
       if (msg.type === 'conversation-update') {
         const convo = msg.conversation || [];
