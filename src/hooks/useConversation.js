@@ -254,14 +254,9 @@ export function useConversation() {
 
     try {
       const vapi = getVapi();
-      // Override only system prompt and first message for dialect
-      await vapi.start(ASSISTANT_ID, {
-        firstMessage: greetings[selectedDialect] || greetings.mexico,
-        model: {
-          messages: [{ role: 'system', content: systemPrompt }],
-        },
-        metadata: { level: selectedLevel, theme: selectedTheme, dialect: selectedDialect },
-      });
+      // Start with no overrides (matches working getateam pattern)
+      // Dialect/level customization will be handled via VAPI API updates
+      await vapi.start(ASSISTANT_ID);
     } catch (err) {
       console.error('Failed to start VAPI call:', err);
       const msg = err?.message || String(err);
