@@ -47,33 +47,8 @@ export function useConversation() {
 
   const vapiRef = useRef(null);
   const timerRef = useRef(null);
-  const karaokeTimerRef = useRef(null);
-
-  // Karaoke: reveal words one by one over the speech duration
-  const startKaraoke = useCallback((text, durationEstimate) => {
-    const words = text.split(/\s+/);
-    setKaraokeWords(words);
-    setKaraokeIndex(0);
-
-    // Estimate ~200ms per word at normal speed, adjusted for speech speed
-    const msPerWord = Math.max(150, (durationEstimate || words.length * 200) / words.length);
-
-    let idx = 0;
-    if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
-
-    karaokeTimerRef.current = setInterval(() => {
-      idx++;
-      if (idx >= words.length) {
-        clearInterval(karaokeTimerRef.current);
-        setKaraokeIndex(words.length);
-      } else {
-        setKaraokeIndex(idx);
-      }
-    }, msPerWord / speed);
-  }, [speed]);
 
   const stopKaraoke = useCallback(() => {
-    if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
     setKaraokeWords([]);
     setKaraokeIndex(-1);
   }, []);
@@ -113,51 +88,60 @@ export function useConversation() {
       setKaraokeIndex(prev => prev >= 0 ? 999 : prev);
     });
 
-    // Listen for all message types to find LLM output
+    // Transcripts — use partial for real-time karaoke, final for messages
     vapi.on('message', (msg) => {
-      // Model output — this is the REAL text the LLM generated (proper Spanish)
-      if (msg.type === 'model-output' && msg.output) {
-        const spanishText = msg.output;
-        handleAssistantMessage(spanishText);
-      }
-
-      // Conversation update — alternative source for LLM text
-      if (msg.type === 'conversation-update' && msg.conversation) {
-        const lastMsg = msg.conversation[msg.conversation.length - 1];
-        if (lastMsg?.role === 'assistant' && lastMsg?.content) {
-          handleAssistantMessage(lastMsg.content);
-        }
-      }
-
-      // Fallback: use transcript if we haven't gotten LLM text
-      // But mark it as transcript-sourced so we can tell the difference
       if (msg.type === 'transcript') {
-        if (msg.role === 'assistant' && msg.transcriptType === 'final') {
-          // Only use if we don't already have a message for this turn
-          setMessages(prev => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg?.role === 'assistant' && !lastMsg.fromLLM) {
-              // We already added this from transcript, skip
-              return prev;
-            }
-            if (lastMsg?.role === 'assistant' && lastMsg.fromLLM) {
-              // LLM text already captured, skip transcript
-              return prev;
-            }
-            // No LLM text yet — use transcript as fallback
-            const text = msg.transcript;
-            return [...prev, {
-              role: 'assistant',
-              content: text,
-              spanish: text,
-              english: null,
-              fromLLM: false,
-            }];
-          });
+        // ASSISTANT partial — real-time subtitle as she speaks
+        if (msg.role === 'assistant' && msg.transcriptType === 'partial') {
+          const partialText = msg.transcript;
+          if (partialText && partialText.trim()) {
+            // Show words as they come in (karaoke effect)
+            const words = partialText.trim().split(/\s+/);
+            setKaraokeWords(words);
+            setKaraokeIndex(words.length - 1); // Reveal all current words
+            setCurrentSubtitles(prev => ({
+              spanish: partialText,
+              english: prev?.english || '',
+            }));
+          }
         }
 
+        // ASSISTANT final — complete message, trigger translation
+        if (msg.role === 'assistant' && msg.transcriptType === 'final') {
+          const spanishText = msg.transcript;
+          if (spanishText && spanishText.trim().length > 1) {
+            // Show full text
+            const words = spanishText.trim().split(/\s+/);
+            setKaraokeWords(words);
+            setKaraokeIndex(words.length); // All revealed
+
+            setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
+
+            // Add to message history
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: spanishText,
+              spanish: spanishText,
+              english: null,
+            }]);
+
+            // Translate
+            translateText(spanishText).then(english => {
+              setCurrentSubtitles(prev =>
+                prev?.spanish === spanishText ? { ...prev, english } : prev
+              );
+              setMessages(prev => prev.map(m =>
+                m.spanish === spanishText && !m.english ? { ...m, english } : m
+              ));
+            });
+          }
+        }
+
+        // USER final — add to history
         if (msg.role === 'user' && msg.transcriptType === 'final') {
-          setMessages(prev => [...prev, { role: 'user', content: msg.transcript }]);
+          if (msg.transcript && msg.transcript.trim()) {
+            setMessages(prev => [...prev, { role: 'user', content: msg.transcript }]);
+          }
           setIsListening(false);
           setIsThinking(true);
         }
@@ -176,42 +160,6 @@ export function useConversation() {
 
     return vapi;
   }, [stopKaraoke]);
-
-  // Process assistant message from LLM output (real Spanish text)
-  const handleAssistantMessage = useCallback((spanishText) => {
-    // Avoid duplicates
-    setMessages(prev => {
-      const lastMsg = prev[prev.length - 1];
-      if (lastMsg?.role === 'assistant' && lastMsg?.spanish === spanishText) {
-        return prev; // Already have this message
-      }
-      // Remove any transcript-sourced fallback for this turn
-      const filtered = lastMsg?.role === 'assistant' && !lastMsg.fromLLM
-        ? prev.slice(0, -1)
-        : prev;
-      return [...filtered, {
-        role: 'assistant',
-        content: spanishText,
-        spanish: spanishText,
-        english: null,
-        fromLLM: true,
-      }];
-    });
-
-    // Show subtitle + start karaoke
-    setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
-    startKaraoke(spanishText);
-
-    // Translate async
-    translateText(spanishText).then(english => {
-      setCurrentSubtitles(prev =>
-        prev?.spanish === spanishText ? { ...prev, english } : prev
-      );
-      setMessages(prev => prev.map((m) =>
-        m.spanish === spanishText && !m.english ? { ...m, english } : m
-      ));
-    });
-  }, [startKaraoke]);
 
   const translateText = async (spanishText) => {
     try {
