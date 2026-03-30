@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 
 const PULSE_COLORS = {
   idle: 'from-purple-500/20 to-pink-500/20',
@@ -9,18 +9,54 @@ const PULSE_COLORS = {
 };
 
 export default function Avatar({ isListening, isSpeaking, isThinking, callState }) {
-  const videoRef = useRef(null);
+  const imgRef = useRef(null);
+  const [mouthOpen, setMouthOpen] = useState(0); // 0-1 mouth animation
+  const [headTilt, setHeadTilt] = useState(0); // subtle head movement
+  const animFrameRef = useRef(null);
 
   const state = callState === 'connecting' ? 'connecting' :
     isListening ? 'listening' :
     isThinking ? 'thinking' :
     isSpeaking ? 'speaking' : 'idle';
 
-  // Adjust video playback rate based on state
+  // Audio-reactive mouth animation when speaking
   useEffect(() => {
-    if (!videoRef.current) return;
-    videoRef.current.playbackRate = state === 'speaking' ? 1 : 0.6;
+    if (state !== 'speaking') {
+      setMouthOpen(0);
+      setHeadTilt(0);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      return;
+    }
+
+    // Simulate mouth movement with rhythmic pattern
+    // Real audio analysis would use Web Audio API analyzer on the output stream
+    // but VAPI handles audio internally, so we simulate natural speech rhythm
+    let t = 0;
+    const animate = () => {
+      t += 0.15;
+      // Natural speech rhythm: mix of frequencies for realistic movement
+      const mouth = Math.abs(
+        Math.sin(t * 2.3) * 0.4 +
+        Math.sin(t * 3.7) * 0.3 +
+        Math.sin(t * 5.1) * 0.2 +
+        Math.sin(t * 7.3) * 0.1
+      );
+      // Subtle head movement
+      const tilt = Math.sin(t * 0.4) * 1.5 + Math.sin(t * 0.7) * 0.8;
+
+      setMouthOpen(Math.min(1, mouth));
+      setHeadTilt(tilt);
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    animFrameRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
   }, [state]);
+
+  // Gentle idle breathing animation
+  const idleBreathing = state === 'idle' || state === 'listening';
 
   const stateLabel = {
     idle: 'Ready',
@@ -30,9 +66,15 @@ export default function Avatar({ isListening, isSpeaking, isThinking, callState 
     speaking: 'Sofia is speaking...',
   };
 
+  // Dynamic transform based on state
+  const avatarTransform = state === 'speaking'
+    ? `rotate(${headTilt}deg) scale(${1 + mouthOpen * 0.02})`
+    : idleBreathing
+      ? undefined // CSS animation handles this
+      : 'scale(1)';
+
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Avatar container with animated ring */}
       <div className="relative">
         {/* Outer pulse ring */}
         <div
@@ -49,46 +91,62 @@ export default function Avatar({ isListening, isSpeaking, isThinking, callState 
           state === 'connecting' ? 'border-purple-400 animate-pulse' :
           'border-zinc-700'
         }`}>
-          {/* Try video first, fallback to gradient */}
-          <video
-            ref={videoRef}
-            src="/sofia-loop.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              // Hide video on error, show fallback
-              e.target.style.display = 'none';
-              e.target.nextSibling.style.display = 'flex';
-            }}
-          />
-          {/* Fallback: still image or gradient */}
+          {/* Sofia image with animation */}
           <div
-            className="w-full h-full items-center justify-center"
-            style={{ display: 'none' }}
+            className={`w-full h-full ${idleBreathing ? 'animate-[breathe_4s_ease-in-out_infinite]' : ''}`}
+            style={{
+              transform: avatarTransform,
+              transition: state === 'speaking' ? 'none' : 'transform 0.3s ease',
+            }}
           >
             <img
+              ref={imgRef}
               src="/sofia-still.png"
               alt="Sofia"
               className="w-full h-full object-cover"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextSibling.style.display = 'flex';
+            />
+          </div>
+
+          {/* Mouth overlay — semi-transparent dark area that pulses to simulate talking */}
+          {state === 'speaking' && (
+            <div
+              className="absolute bottom-[22%] left-1/2 -translate-x-1/2 rounded-full bg-black/20 pointer-events-none"
+              style={{
+                width: `${18 + mouthOpen * 14}%`,
+                height: `${2 + mouthOpen * 8}%`,
+                opacity: 0.15 + mouthOpen * 0.2,
+                transition: 'none',
+                filter: 'blur(2px)',
               }}
             />
-            <div className="w-full h-full bg-gradient-to-br from-purple-600 via-pink-500 to-rose-400 items-center justify-center" style={{ display: 'none' }}>
-              <span className="text-7xl">👩🏽</span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Status indicator dot */}
+        {/* Audio visualizer rings when speaking */}
+        {state === 'speaking' && (
+          <>
+            <div
+              className="absolute inset-0 rounded-full border border-emerald-400/30 pointer-events-none"
+              style={{
+                transform: `scale(${1.05 + mouthOpen * 0.08})`,
+                opacity: 0.3 + mouthOpen * 0.4,
+              }}
+            />
+            <div
+              className="absolute inset-0 rounded-full border border-emerald-400/15 pointer-events-none"
+              style={{
+                transform: `scale(${1.1 + mouthOpen * 0.12})`,
+                opacity: 0.15 + mouthOpen * 0.2,
+              }}
+            />
+          </>
+        )}
+
+        {/* Status dot */}
         <div className={`absolute bottom-2 right-2 w-4 h-4 rounded-full border-2 border-zinc-950 ${
           state === 'listening' ? 'bg-blue-400 animate-pulse' :
           state === 'thinking' ? 'bg-amber-400 animate-pulse' :
-          state === 'speaking' ? 'bg-emerald-400 animate-pulse' :
+          state === 'speaking' ? 'bg-emerald-400' :
           state === 'connecting' ? 'bg-purple-400 animate-pulse' :
           'bg-zinc-600'
         }`} />

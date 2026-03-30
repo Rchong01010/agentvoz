@@ -1,179 +1,165 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const DID_AGENT_ID = import.meta.env.VITE_DID_AGENT_ID || 'PLACEHOLDER_AGENT_ID';
-const DID_CLIENT_KEY = import.meta.env.VITE_DID_CLIENT_KEY || 'PLACEHOLDER_CLIENT_KEY';
+const DID_AGENT_ID = 'v2_agt_lH4vls9r';
+const DID_CLIENT_KEY = 'ck_eXNPU1wfyQhIkCdyqTfd_';
 
-/**
- * Hook that wraps the D-ID Client SDK for managing an interactive avatar agent.
- *
- * @param {Object} options
- * @param {string} [options.agentId] - D-ID agent ID (falls back to env var)
- * @param {string} [options.clientKey] - D-ID client key (falls back to env var)
- */
-export function useDIDAgent({ agentId, clientKey } = {}) {
-  const [connectionState, setConnectionState] = useState('idle'); // idle | connecting | connected | speaking | error
+export function useDIDAgent() {
+  const [connectionState, setConnectionState] = useState('idle');
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [messages, setMessages] = useState([]);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [idleVideoSrc, setIdleVideoSrc] = useState(null);
+  const [error, setError] = useState(null);
 
   const agentManagerRef = useRef(null);
+  const srcObjectRef = useRef(null);
   const videoElRef = useRef(null);
   const sdkRef = useRef(null);
 
-  const resolvedAgentId = agentId || DID_AGENT_ID;
-  const resolvedClientKey = clientKey || DID_CLIENT_KEY;
-
-  // Lazy-load the SDK
   const getSdk = useCallback(async () => {
     if (sdkRef.current) return sdkRef.current;
-    try {
-      const sdk = await import('@d-id/client-sdk');
-      sdkRef.current = sdk;
-      return sdk;
-    } catch (err) {
-      console.error('Failed to load D-ID SDK:', err);
-      setConnectionState('error');
-      setErrorMessage('D-ID SDK failed to load.');
-      return null;
-    }
+    const sdk = await import('@d-id/client-sdk');
+    sdkRef.current = sdk;
+    return sdk;
   }, []);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (videoElement) => {
     if (agentManagerRef.current) return;
 
     setConnectionState('connecting');
-    setErrorMessage(null);
-
-    const sdk = await getSdk();
-    if (!sdk) return;
+    setError(null);
+    if (videoElement) videoElRef.current = videoElement;
 
     try {
+      const sdk = await getSdk();
+
       const callbacks = {
         onSrcObjectReady(value) {
-          if (videoElRef.current && value) {
+          srcObjectRef.current = value;
+          if (videoElRef.current) {
             videoElRef.current.srcObject = value;
-            videoElRef.current.src = '';
+          }
+          return value;
+        },
+
+        onVideoStateChange(state) {
+          if (state === 'STOP') {
+            setIsSpeaking(false);
+            if (videoElRef.current) {
+              videoElRef.current.srcObject = undefined;
+              const idleVideo = agentManagerRef.current?.agent?.presenter?.idle_video;
+              if (idleVideo) videoElRef.current.src = idleVideo;
+            }
+          } else {
+            setIsSpeaking(true);
+            if (videoElRef.current && srcObjectRef.current) {
+              videoElRef.current.srcObject = srcObjectRef.current;
+            }
           }
         },
 
         onConnectionStateChange(state) {
-          // D-ID states: 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed'
-          if (state === 'connected') {
-            setConnectionState('connected');
-          } else if (state === 'connecting' || state === 'new') {
-            setConnectionState('connecting');
-          } else if (state === 'disconnected' || state === 'closed') {
+          if (state === 'connected') setConnectionState('connected');
+          else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
             setConnectionState('idle');
             agentManagerRef.current = null;
-          } else if (state === 'failed') {
-            setConnectionState('error');
-            setErrorMessage('D-ID connection failed.');
-            agentManagerRef.current = null;
           }
         },
 
-        onVideoStateChange(state) {
-          // 'speaking' | 'idle' | etc.
-          if (state === 'speaking') {
-            setConnectionState('speaking');
-          } else if (state === 'idle') {
-            setConnectionState((prev) => (prev === 'speaking' ? 'connected' : prev));
+        onNewMessage(msgs, type) {
+          if (msgs && msgs.length > 0) {
+            const last = msgs[msgs.length - 1];
+            if (last.role === 'assistant' && last.content) {
+              setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: last.content,
+                spanish: last.content,
+                english: null,
+              }]);
+
+              translateText(last.content).then(english => {
+                setMessages(prev => prev.map(m =>
+                  m.content === last.content && !m.english ? { ...m, english } : m
+                ));
+              });
+            }
           }
         },
 
-        onNewMessage(msg, role) {
-          setMessages((prev) => [...prev, { role: role || 'agent', content: msg, ts: Date.now() }]);
-        },
-
-        onError(error, errorData) {
-          console.error('D-ID error:', error, errorData);
-          setErrorMessage(typeof error === 'string' ? error : 'D-ID encountered an error.');
+        onError(err, data) {
+          console.error('D-ID error:', err, data);
+          setError(typeof err === 'string' ? err : 'D-ID error');
         },
       };
 
-      const manager = await sdk.createAgentManager(resolvedClientKey, {
-        agentId: resolvedAgentId,
+      // D-ID SDK: createAgentManager(agentId, { auth, callbacks, streamOptions })
+      const manager = await sdk.createAgentManager(DID_AGENT_ID, {
+        auth: { type: 'key', clientKey: DID_CLIENT_KEY },
         callbacks,
+        streamOptions: { compatibilityMode: 'auto', streamWarmup: true },
       });
 
       agentManagerRef.current = manager;
-
-      // Grab the idle video URL if available
-      if (manager.idle_video) {
-        setIdleVideoSrc(manager.idle_video);
-      }
-
       await manager.connect();
     } catch (err) {
       console.error('D-ID connect error:', err);
+      setError(err?.message || 'Failed to connect');
       setConnectionState('error');
-      setErrorMessage(err?.message || 'Failed to connect to D-ID agent.');
+    }
+  }, [getSdk]);
+
+  const disconnect = useCallback(() => {
+    if (agentManagerRef.current) {
+      agentManagerRef.current.disconnect();
       agentManagerRef.current = null;
     }
-  }, [getSdk, resolvedAgentId, resolvedClientKey]);
-
-  const disconnect = useCallback(async () => {
-    try {
-      if (agentManagerRef.current) {
-        await agentManagerRef.current.disconnect();
-      }
-    } catch (err) {
-      console.error('D-ID disconnect error:', err);
-    } finally {
-      agentManagerRef.current = null;
-      setConnectionState('idle');
-      if (videoElRef.current) {
-        videoElRef.current.srcObject = null;
-      }
-    }
+    setConnectionState('idle');
+    setIsSpeaking(false);
+    setMessages([]);
+    setError(null);
   }, []);
 
-  const speak = useCallback(async (text) => {
-    if (!agentManagerRef.current) {
-      console.warn('D-ID agent not connected');
-      return;
-    }
-    try {
-      await agentManagerRef.current.speak({ type: 'text', input: text });
-    } catch (err) {
-      console.error('D-ID speak error:', err);
-      setErrorMessage('Failed to make avatar speak.');
-    }
-  }, []);
+  const chat = useCallback((text) => {
+    if (!agentManagerRef.current || connectionState !== 'connected') return;
+    setMessages(prev => [...prev, { role: 'user', content: text }]);
+    agentManagerRef.current.chat(text);
+  }, [connectionState]);
 
-  const chat = useCallback(async (text) => {
-    if (!agentManagerRef.current) {
-      console.warn('D-ID agent not connected');
-      return;
-    }
-    try {
-      setMessages((prev) => [...prev, { role: 'user', content: text, ts: Date.now() }]);
-      await agentManagerRef.current.chat(text);
-    } catch (err) {
-      console.error('D-ID chat error:', err);
-      setErrorMessage('Failed to send chat message.');
-    }
-  }, []);
+  const speak = useCallback((text) => {
+    if (!agentManagerRef.current || connectionState !== 'connected') return;
+    agentManagerRef.current.speak({ type: 'text', input: text });
+  }, [connectionState]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (agentManagerRef.current) {
-        agentManagerRef.current.disconnect().catch(() => {});
-        agentManagerRef.current = null;
+        agentManagerRef.current.disconnect();
       }
     };
   }, []);
 
   return {
     connectionState,
+    isSpeaking,
     messages,
-    errorMessage,
-    idleVideoSrc,
+    error,
     videoElRef,
     connect,
     disconnect,
-    speak,
     chat,
+    speak,
   };
+}
+
+async function translateText(spanishText) {
+  try {
+    const res = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: spanishText }),
+    });
+    if (!res.ok) return spanishText;
+    const data = await res.json();
+    return data.english || spanishText;
+  } catch {
+    return spanishText;
+  }
 }
