@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import VapiModule from '@vapi-ai/web';
 import { CONFIG } from '../lib/config';
+import { getLesson, buildLessonPrompt } from '../lib/curriculum';
 import ASSISTANTS from '../lib/assistants.json';
 
 const Vapi = VapiModule.default || VapiModule;
@@ -47,6 +48,7 @@ export function useConversation() {
 
   const vapiRef = useRef(null);
   const timerRef = useRef(null);
+  const pendingLessonRef = useRef(null);
 
   const stopKaraoke = useCallback(() => {
     setKaraokeWords([]);
@@ -63,6 +65,22 @@ export function useConversation() {
       setStarted(true);
       setDuration(0);
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+
+      // If there's a pending lesson, inject it after connection
+      if (pendingLessonRef.current) {
+        const lesson = pendingLessonRef.current;
+        pendingLessonRef.current = null;
+        // Send lesson instructions as a system-like message to Sofia
+        setTimeout(() => {
+          vapi.send({
+            type: 'add-message',
+            message: {
+              role: 'system',
+              content: buildLessonPrompt(lesson),
+            },
+          });
+        }, 2000); // Wait for Sofia's greeting to finish
+      }
     });
 
     vapi.on('call-end', () => {
@@ -199,6 +217,14 @@ export function useConversation() {
       argentina: '¡Hola! Me llamo Sofía. Soy tu tutora de español. ¿Cómo te llamás, che?',
       nicaragua: '¡Hola! Me llamo Sofía. Soy tu tutora de español. ¿Cómo te llamás? Ideay, ¡contame!',
     };
+
+    // If a lesson is specified, queue it for injection after call connects
+    if (lessonId) {
+      const lesson = getLesson(lessonId);
+      if (lesson) {
+        pendingLessonRef.current = lesson;
+      }
+    }
 
     try {
       const vapi = getVapi();

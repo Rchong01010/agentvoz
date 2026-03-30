@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar';
 import Subtitles from '../components/Subtitles';
 import ChatHistory from '../components/ChatHistory';
 import { CONFIG } from '../lib/config';
+import { getLesson } from '../lib/curriculum';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -19,8 +20,10 @@ export default function Learn() {
   const theme = searchParams.get('theme') || 'greetings';
   const dialectParam = searchParams.get('dialect') || 'mexico';
   const speedParam = parseFloat(searchParams.get('speed')) || 1.0;
+  const lessonId = searchParams.get('lesson') || null;
 
   const dialectConfig = CONFIG.DIALECTS.find(d => d.id === dialectParam);
+  const lesson = lessonId ? getLesson(lessonId) : null;
 
   const {
     messages,
@@ -41,7 +44,7 @@ export default function Learn() {
 
   useEffect(() => {
     if (callState === 'idle' && !started) {
-      startConversation(level, theme, dialectParam, speedParam);
+      startConversation(level, theme, dialectParam, speedParam, lessonId);
     }
   }, []);
 
@@ -61,6 +64,11 @@ export default function Learn() {
           </h1>
           {dialectConfig && (
             <span className="text-sm">{dialectConfig.flag}</span>
+          )}
+          {lesson && (
+            <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-full">
+              {lesson.title}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-3">
