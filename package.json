@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@d-id/client-sdk": "^1.1.55",
     "@vapi-ai/web": "^2.5.2",
     "groq-sdk": "^1.1.2",
     "react": "^19.2.4",
