@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import Vapi from '@vapi-ai/web';
+import VapiModule from '@vapi-ai/web';
+// CJS/ESM interop: the constructor is at .default when imported as ESM
+const Vapi = VapiModule.default || VapiModule;
 
 // Public keys (not secrets) - safe to embed client-side
 const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || '7b4daf13-8ad4-4f82-892a-60292ef9b476';
