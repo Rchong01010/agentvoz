@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
 import VapiModule from '@vapi-ai/web';
 import { CONFIG } from '../lib/config';
+import ASSISTANTS from '../lib/assistants.json';
 
 const Vapi = VapiModule.default || VapiModule;
 
 const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || '7b4daf13-8ad4-4f82-892a-60292ef9b476';
-const ASSISTANT_ID = import.meta.env.VITE_VAPI_ASSISTANT_ID || '551e2290-9efe-4825-9f7c-6063dc28c2fe';
 
 // Base system prompt — dialect hint gets appended
 const BASE_SYSTEM_PROMPT = `You are Sofia, a warm and encouraging AI Spanish language tutor on AgentVoz.
@@ -176,11 +176,11 @@ export function useConversation() {
     }
   };
 
-  const startConversation = useCallback(async (selectedLevel, selectedTheme, selectedDialect, selectedSpeed) => {
+  const startConversation = useCallback(async (selectedLevel, selectedTheme, selectedDialect, selectedSpeed, lessonId) => {
     const dialectConfig = CONFIG.DIALECTS.find(d => d.id === selectedDialect) || CONFIG.DIALECTS[0];
 
     setLevel(selectedLevel);
-    setTheme(selectedTheme);
+    setTheme(selectedTheme || (lessonId ? 'lesson' : 'free'));
     setDialect(selectedDialect);
     setSpeed(selectedSpeed || 1.0);
     setMessages([]);
@@ -202,9 +202,9 @@ export function useConversation() {
 
     try {
       const vapi = getVapi();
-      // Start with no overrides (matches working getateam pattern)
-      // Dialect/level customization will be handled via VAPI API updates
-      await vapi.start(ASSISTANT_ID);
+      // Select the right assistant for this dialect
+      const assistantId = ASSISTANTS[selectedDialect] || ASSISTANTS.mexico;
+      await vapi.start(assistantId);
     } catch (err) {
       console.error('Failed to start VAPI call:', err);
       const msg = err?.message || String(err);
