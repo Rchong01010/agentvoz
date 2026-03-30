@@ -254,20 +254,12 @@ export function useConversation() {
 
     try {
       const vapi = getVapi();
-      // Override assistant config with dialect-specific prompt and speed
+      // Override only system prompt and first message for dialect
       await vapi.start(ASSISTANT_ID, {
-        transcriber: {
-          provider: 'assembly-ai',
-          language: 'es',
-        },
-        model: {
-          provider: 'groq',
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: systemPrompt }],
-          temperature: 0.7,
-          maxTokens: 150,
-        },
         firstMessage: greetings[selectedDialect] || greetings.mexico,
+        model: {
+          messages: [{ role: 'system', content: systemPrompt }],
+        },
         metadata: { level: selectedLevel, theme: selectedTheme, dialect: selectedDialect },
       });
     } catch (err) {
