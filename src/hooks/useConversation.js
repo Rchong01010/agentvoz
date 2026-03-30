@@ -142,18 +142,19 @@ export function useConversation() {
 
     try {
       const vapi = await getVapi();
-      await vapi.start(ASSISTANT_ID, {
-        metadata: { level: selectedLevel, theme: selectedTheme },
-      });
+      console.log('Starting VAPI call with assistant:', ASSISTANT_ID);
+      console.log('VAPI public key:', VAPI_PUBLIC_KEY);
+      await vapi.start(ASSISTANT_ID);
     } catch (err) {
-      console.error('Failed to start call:', err);
-      const msg = err?.message || '';
+      console.error('Failed to start VAPI call:', err);
+      console.error('Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+      const msg = err?.message || String(err);
       if (msg.includes('Permission') || msg.includes('NotAllowed')) {
         setError('Microphone blocked. Allow mic access in your browser settings.');
       } else if (msg.includes('NotFound')) {
         setError('No microphone found.');
       } else {
-        setError('Could not connect to Sofia. Please try again.');
+        setError(`Could not connect to Sofia: ${msg.slice(0, 100)}`);
       }
       setCallState('error');
     }
