@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Vapi from '@vapi-ai/web';
 
 // Public keys (not secrets) - safe to embed client-side
 const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || '7b4daf13-8ad4-4f82-892a-60292ef9b476';
@@ -18,19 +19,10 @@ export function useConversation() {
   const [duration, setDuration] = useState(0);
 
   const vapiRef = useRef(null);
-  const vapiModuleRef = useRef(null);
   const timerRef = useRef(null);
-  // Track last assistant transcript for translation
-  const pendingTranslationRef = useRef(null);
 
-  // Preload VAPI SDK on mount
-  useEffect(() => {
-    vapiModuleRef.current = import('@vapi-ai/web');
-  }, []);
-
-  const getVapi = useCallback(async () => {
+  const getVapi = useCallback(() => {
     if (vapiRef.current) return vapiRef.current;
-    const { default: Vapi } = await (vapiModuleRef.current || import('@vapi-ai/web'));
     const vapi = new Vapi(VAPI_PUBLIC_KEY);
     vapiRef.current = vapi;
 
@@ -141,13 +133,10 @@ export function useConversation() {
     setCurrentSubtitles(null);
 
     try {
-      const vapi = await getVapi();
-      console.log('Starting VAPI call with assistant:', ASSISTANT_ID);
-      console.log('VAPI public key:', VAPI_PUBLIC_KEY);
+      const vapi = getVapi();
       await vapi.start(ASSISTANT_ID);
     } catch (err) {
       console.error('Failed to start VAPI call:', err);
-      console.error('Error details:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
       const msg = err?.message || String(err);
       if (msg.includes('Permission') || msg.includes('NotAllowed')) {
         setError('Microphone blocked. Allow mic access in your browser settings.');
