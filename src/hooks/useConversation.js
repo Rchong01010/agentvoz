@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY;
+// Public keys (not secrets) - safe to embed client-side
+const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || '7b4daf13-8ad4-4f82-892a-60292ef9b476';
 const ASSISTANT_ID = import.meta.env.VITE_VAPI_ASSISTANT_ID || '551e2290-9efe-4825-9f7c-6063dc28c2fe';
 
 export function useConversation() {
