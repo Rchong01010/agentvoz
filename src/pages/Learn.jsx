@@ -4,6 +4,7 @@ import { useConversation } from '../hooks/useConversation';
 import Avatar from '../components/Avatar';
 import Subtitles from '../components/Subtitles';
 import ChatHistory from '../components/ChatHistory';
+import { CONFIG } from '../lib/config';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -16,6 +17,10 @@ export default function Learn() {
   const navigate = useNavigate();
   const level = searchParams.get('level') || 'beginner';
   const theme = searchParams.get('theme') || 'greetings';
+  const dialectParam = searchParams.get('dialect') || 'mexico';
+  const speedParam = parseFloat(searchParams.get('speed')) || 1.0;
+
+  const dialectConfig = CONFIG.DIALECTS.find(d => d.id === dialectParam);
 
   const {
     messages,
@@ -23,6 +28,8 @@ export default function Learn() {
     isSpeaking,
     isThinking,
     currentSubtitles,
+    karaokeWords,
+    karaokeIndex,
     started,
     error,
     callState,
@@ -34,7 +41,7 @@ export default function Learn() {
 
   useEffect(() => {
     if (callState === 'idle' && !started) {
-      startConversation(level, theme);
+      startConversation(level, theme, dialectParam, speedParam);
     }
   }, []);
 
@@ -47,11 +54,14 @@ export default function Learn() {
     <div className="min-h-screen bg-zinc-950 flex flex-col">
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-900">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">
             <span className="text-white">Agent</span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Voz</span>
           </h1>
+          {dialectConfig && (
+            <span className="text-sm">{dialectConfig.flag}</span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {callState === 'active' && (
@@ -73,7 +83,7 @@ export default function Learn() {
 
       {/* Main conversation area */}
       <main className="flex-1 flex flex-col items-center justify-between py-8 gap-6">
-        {/* Top section: Chat history */}
+        {/* Chat history */}
         <div className="w-full flex-shrink-0">
           <ChatHistory messages={messages} />
         </div>
@@ -86,17 +96,20 @@ export default function Learn() {
             isThinking={isThinking}
             callState={callState}
           />
-          <Subtitles subtitles={currentSubtitles} />
+          <Subtitles
+            subtitles={currentSubtitles}
+            karaokeWords={karaokeWords}
+            karaokeIndex={karaokeIndex}
+          />
         </div>
 
-        {/* Error display */}
+        {/* Error */}
         {error && (
           <p className="text-red-400 text-sm text-center px-4">{error}</p>
         )}
 
-        {/* Bottom: status + text input fallback */}
+        {/* Bottom controls */}
         <div className="flex flex-col items-center gap-4 pb-4">
-          {/* Voice status indicator */}
           <div className="flex items-center gap-2">
             {callState === 'active' && (
               <>

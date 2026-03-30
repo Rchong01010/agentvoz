@@ -1,9 +1,39 @@
 export const CONFIG = {
   APP_NAME: 'AgentVoz',
   TAGLINE: 'Your AI Spanish Tutor',
-  AVATAR_NAME: 'Sofia',
   DEFAULT_LEVEL: 'beginner',
+  DEFAULT_DIALECT: 'mexico',
   LEVELS: ['beginner', 'intermediate', 'advanced'],
+  DIALECTS: [
+    {
+      id: 'mexico',
+      label: 'Mexico',
+      flag: '🇲🇽',
+      description: 'Mexican Spanish',
+      promptHint: 'You speak Mexican Spanish from Mexico City. Use Mexican vocabulary and expressions: "carro" (car), "computadora" (computer), "platicar" (to chat), "padre" (cool), "no manches" (no way), "andale" (come on/go ahead), "mande" (polite what?). Use "ustedes" for plural you. Pronunciation is clear and neutral with soft consonants.',
+    },
+    {
+      id: 'spain',
+      label: 'Spain',
+      flag: '🇪🇸',
+      description: 'Castilian Spanish',
+      promptHint: 'You speak Castilian Spanish from Madrid. Use Spain vocabulary: "coche" (car), "ordenador" (computer), "tío/tía" (dude), "vale" (okay), "mola" (cool), "guay" (great), "quedamos" (let\'s meet up). Use "vosotros" for plural you. Pronounce "c" before e/i and "z" as "th" (ceceo). Drop the "d" in -ado endings.',
+    },
+    {
+      id: 'argentina',
+      label: 'Argentina',
+      flag: '🇦🇷',
+      description: 'Argentine Spanish',
+      promptHint: 'You speak Rioplatense Spanish from Buenos Aires. Use "vos" instead of "tú" (vos sos, vos tenés, vos querés). Use Argentine vocabulary: "auto" (car), "re" as intensifier (re bueno = really good), "che" (hey/buddy), "boludo" (dude, casual), "dale" (okay/go), "posta" (for real), "bancar" (to tolerate). Pronounce "ll" and "y" as "sh" sound.',
+    },
+    {
+      id: 'nicaragua',
+      label: 'Nicaragua',
+      flag: '🇳🇮',
+      description: 'Nicaraguan Spanish',
+      promptHint: 'You speak Nicaraguan Spanish from Managua. Use "vos" conjugation (like Argentina but different rhythm). Use Nicaraguan expressions: "ideay" (well/so/what\'s up), "tuani" (cool/great), "chigüín" (kid), "chunche" (thing/stuff), "dale pues" (okay then), "puchica" (wow/dang). Speak with a relaxed, warm Central American rhythm. Drop final "s" sounds.',
+    },
+  ],
   THEMES: [
     { id: 'greetings', label: 'Casual Greetings', icon: '👋' },
     { id: 'restaurant', label: 'At a Restaurant', icon: '🍽️' },
@@ -11,5 +41,11 @@ export const CONFIG = {
     { id: 'shopping', label: 'Shopping', icon: '🛍️' },
     { id: 'daily', label: 'Daily Life', icon: '☀️' },
     { id: 'free', label: 'Free Conversation', icon: '💬' },
+  ],
+  SPEED_OPTIONS: [
+    { value: 0.7, label: 'Slow', description: 'For beginners' },
+    { value: 0.85, label: 'Moderate', description: 'Clear pace' },
+    { value: 1.0, label: 'Normal', description: 'Native speed' },
+    { value: 1.15, label: 'Fast', description: 'Challenge mode' },
   ],
 };
