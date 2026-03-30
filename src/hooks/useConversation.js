@@ -1,5 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
-import { getSystemPrompt, getGreeting } from '../lib/prompts';
+import { useState, useRef, useCallback, useEffect } from 'react';
+
+const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY;
+const ASSISTANT_ID = import.meta.env.VITE_VAPI_ASSISTANT_ID || '551e2290-9efe-4825-9f7c-6063dc28c2fe';
 
 export function useConversation() {
   const [messages, setMessages] = useState([]);
@@ -11,211 +13,174 @@ export function useConversation() {
   const [theme, setTheme] = useState('greetings');
   const [started, setStarted] = useState(false);
   const [error, setError] = useState(null);
+  const [callState, setCallState] = useState('idle'); // idle | connecting | active | error
+  const [duration, setDuration] = useState(0);
 
-  const recognitionRef = useRef(null);
-  const audioRef = useRef(null);
-  const messagesRef = useRef([]);
+  const vapiRef = useRef(null);
+  const vapiModuleRef = useRef(null);
+  const timerRef = useRef(null);
+  // Track last assistant transcript for translation
+  const pendingTranslationRef = useRef(null);
 
-  // Keep ref in sync for use in callbacks
-  messagesRef.current = messages;
-
-  const playBrowserTTS = useCallback((text) => {
-    return new Promise((resolve) => {
-      const synth = window.speechSynthesis;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'es-MX';
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
-
-      // Try to find a Spanish voice
-      const voices = synth.getVoices();
-      const spanishVoice = voices.find(v => v.lang.startsWith('es')) || voices[0];
-      if (spanishVoice) utterance.voice = spanishVoice;
-
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      synth.speak(utterance);
-    });
+  // Preload VAPI SDK on mount
+  useEffect(() => {
+    vapiModuleRef.current = import('@vapi-ai/web');
   }, []);
 
-  const playAudio = useCallback(async (spanishText) => {
-    setIsSpeaking(true);
+  const getVapi = useCallback(async () => {
+    if (vapiRef.current) return vapiRef.current;
+    const { default: Vapi } = await (vapiModuleRef.current || import('@vapi-ai/web'));
+    const vapi = new Vapi(VAPI_PUBLIC_KEY);
+    vapiRef.current = vapi;
+
+    // --- VAPI Event Handlers ---
+
+    vapi.on('call-start', () => {
+      setCallState('active');
+      setStarted(true);
+      setDuration(0);
+      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+    });
+
+    vapi.on('call-end', () => {
+      setCallState('idle');
+      setStarted(false);
+      setIsSpeaking(false);
+      setIsListening(false);
+      setIsThinking(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    });
+
+    vapi.on('speech-start', () => {
+      setIsSpeaking(true);
+      setIsListening(false);
+      setIsThinking(false);
+    });
+
+    vapi.on('speech-end', () => {
+      setIsSpeaking(false);
+      // After Sofia stops speaking, we're listening again
+      setIsListening(true);
+    });
+
+    // Capture transcripts for subtitles
+    vapi.on('message', (msg) => {
+      if (msg.type === 'transcript') {
+        if (msg.role === 'assistant' && msg.transcriptType === 'final') {
+          const spanishText = msg.transcript;
+
+          // Add to messages
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: spanishText,
+            spanish: spanishText,
+            english: null, // Will be filled by translation
+          }]);
+
+          // Show Spanish subtitle immediately
+          setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
+
+          // Fire async translation
+          translateText(spanishText).then(english => {
+            setCurrentSubtitles(prev =>
+              prev?.spanish === spanishText ? { ...prev, english } : prev
+            );
+            // Update message with translation
+            setMessages(prev => prev.map((m, i) =>
+              i === prev.length - 1 && m.spanish === spanishText
+                ? { ...m, english }
+                : m
+            ));
+          });
+        }
+
+        if (msg.role === 'user' && msg.transcriptType === 'final') {
+          const userText = msg.transcript;
+          setMessages(prev => [...prev, { role: 'user', content: userText }]);
+          setIsListening(false);
+          setIsThinking(true);
+        }
+      }
+    });
+
+    vapi.on('error', (err) => {
+      console.error('VAPI error:', err);
+      setCallState('error');
+      setError('Connection lost. Please try again.');
+      setIsSpeaking(false);
+      setIsListening(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    });
+
+    return vapi;
+  }, []);
+
+  // Translation helper
+  const translateText = async (spanishText) => {
     try {
-      // Try ElevenLabs API first
-      const res = await fetch('/api/tts', {
+      const res = await fetch('/api/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: spanishText }),
       });
-
-      if (!res.ok) throw new Error('TTS API failed');
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
-
-      const audio = new Audio(url);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(url);
-      };
-      audio.onerror = () => {
-        setIsSpeaking(false);
-        URL.revokeObjectURL(url);
-      };
-
-      await audio.play();
-    } catch (err) {
-      // Fallback to browser TTS
-      console.log('Falling back to browser TTS');
-      await playBrowserTTS(spanishText);
-      setIsSpeaking(false);
-    }
-  }, [playBrowserTTS]);
-
-  const sendToLLM = useCallback(async (userText) => {
-    setIsThinking(true);
-    setError(null);
-
-    const userMessage = { role: 'user', content: userText };
-    const updatedMessages = [...messagesRef.current, userMessage];
-    setMessages(updatedMessages);
-
-    // Build chat history for API (only role + content)
-    const chatHistory = updatedMessages.map(m => ({
-      role: m.role,
-      content: m.role === 'user' ? m.content : m.spanish || m.content,
-    }));
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: chatHistory,
-          systemPrompt: getSystemPrompt(level, theme),
-        }),
-      });
-
-      if (!res.ok) throw new Error('Chat failed');
-
+      if (!res.ok) return spanishText;
       const data = await res.json();
-
-      const assistantMessage = {
-        role: 'assistant',
-        content: data.spanish,
-        spanish: data.spanish,
-        english: data.english,
-        correction: data.correction,
-        correctionEnglish: data.correctionEnglish,
-      };
-
-      setMessages(prev => [...prev, assistantMessage]);
-      setCurrentSubtitles({ spanish: data.spanish, english: data.english });
-      setIsThinking(false);
-
-      // Show correction briefly if there is one
-      if (data.correction) {
-        setCurrentSubtitles({
-          spanish: data.correction,
-          english: data.correctionEnglish || 'Correction',
-          isCorrection: true,
-        });
-        await new Promise(r => setTimeout(r, 3000));
-        setCurrentSubtitles({ spanish: data.spanish, english: data.english });
-      }
-
-      await playAudio(data.spanish);
-    } catch (err) {
-      console.error('LLM error:', err);
-      setIsThinking(false);
-      setError('Sofia is having trouble responding. Please try again.');
+      return data.english || spanishText;
+    } catch {
+      return spanishText;
     }
-  }, [level, theme, playAudio]);
-
-  const startListening = useCallback(() => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      setError('Speech recognition is not supported in this browser. Please use Chrome.');
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognition();
-
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    // Accept both English and Spanish input
-    recognition.lang = level === 'advanced' ? 'es-MX' : 'en-US';
-
-    recognition.onstart = () => setIsListening(true);
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setIsListening(false);
-      if (transcript.trim()) {
-        sendToLLM(transcript.trim());
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      if (event.error === 'not-allowed') {
-        setError('Microphone access denied. Please allow microphone access.');
-      }
-    };
-
-    recognition.onend = () => setIsListening(false);
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [level, sendToLLM]);
-
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-    setIsListening(false);
-  }, []);
+  };
 
   const startConversation = useCallback(async (selectedLevel, selectedTheme) => {
     setLevel(selectedLevel);
     setTheme(selectedTheme);
     setMessages([]);
-    setStarted(true);
     setError(null);
+    setCallState('connecting');
+    setCurrentSubtitles(null);
 
-    const greeting = getGreeting(selectedLevel, selectedTheme);
-
-    const assistantMessage = {
-      role: 'assistant',
-      content: greeting.spanish,
-      spanish: greeting.spanish,
-      english: greeting.english,
-    };
-
-    setMessages([assistantMessage]);
-    setCurrentSubtitles({ spanish: greeting.spanish, english: greeting.english });
-
-    await playAudio(greeting.spanish);
-  }, [playAudio]);
+    try {
+      const vapi = await getVapi();
+      await vapi.start(ASSISTANT_ID, {
+        metadata: { level: selectedLevel, theme: selectedTheme },
+      });
+    } catch (err) {
+      console.error('Failed to start call:', err);
+      const msg = err?.message || '';
+      if (msg.includes('Permission') || msg.includes('NotAllowed')) {
+        setError('Microphone blocked. Allow mic access in your browser settings.');
+      } else if (msg.includes('NotFound')) {
+        setError('No microphone found.');
+      } else {
+        setError('Could not connect to Sofia. Please try again.');
+      }
+      setCallState('error');
+    }
+  }, [getVapi]);
 
   const stopConversation = useCallback(() => {
-    if (recognitionRef.current) recognitionRef.current.stop();
-    if (audioRef.current) audioRef.current.pause();
+    vapiRef.current?.stop();
+    setCallState('idle');
     setStarted(false);
     setMessages([]);
     setCurrentSubtitles(null);
-    setIsListening(false);
     setIsSpeaking(false);
+    setIsListening(false);
     setIsThinking(false);
+    if (timerRef.current) clearInterval(timerRef.current);
   }, []);
+
+  // For text input fallback — send text through VAPI
+  const sendToLLM = useCallback(async (userText) => {
+    if (vapiRef.current && callState === 'active') {
+      vapiRef.current.send({
+        type: 'add-message',
+        message: { role: 'user', content: userText },
+      });
+      setMessages(prev => [...prev, { role: 'user', content: userText }]);
+      setIsThinking(true);
+    }
+  }, [callState]);
 
   return {
     messages,
@@ -227,8 +192,8 @@ export function useConversation() {
     theme,
     started,
     error,
-    startListening,
-    stopListening,
+    callState,
+    duration,
     startConversation,
     stopConversation,
     sendToLLM,
