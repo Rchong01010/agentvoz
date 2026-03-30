@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useConversation } from '../hooks/useConversation';
 import Avatar from '../components/Avatar';
@@ -6,6 +6,7 @@ import Subtitles from '../components/Subtitles';
 import ChatHistory from '../components/ChatHistory';
 import { CONFIG } from '../lib/config';
 import { getLesson } from '../lib/curriculum';
+import { hasFreeTrial, incrementConversation, getRemainingFree, FREE_CONVERSATION_LIMIT } from '../lib/freeTrial';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -24,6 +25,8 @@ export default function Learn() {
 
   const dialectConfig = CONFIG.DIALECTS.find(d => d.id === dialectParam);
   const lesson = lessonId ? getLesson(lessonId) : null;
+  const isSubscribed = searchParams.get('subscribed') === 'true';
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const {
     messages,
@@ -43,7 +46,14 @@ export default function Learn() {
   } = useConversation();
 
   useEffect(() => {
+    // Check free trial before starting
+    if (!isSubscribed && !hasFreeTrial()) {
+      setShowPaywall(true);
+      return;
+    }
+
     if (callState === 'idle' && !started) {
+      incrementConversation();
       startConversation(level, theme, dialectParam, speedParam, lessonId);
     }
   }, []);
@@ -52,6 +62,43 @@ export default function Learn() {
     stopConversation();
     navigate('/');
   };
+
+  // Paywall screen
+  if (showPaywall) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <div className="w-24 h-24 rounded-full overflow-hidden mx-auto mb-6 ring-2 ring-purple-500/30 ring-offset-4 ring-offset-zinc-950">
+            <img src="/sofia-still.png" alt="Sofia" className="w-full h-full object-cover" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">You've used your free conversations</h2>
+          <p className="text-zinc-400 mb-8">
+            You had {FREE_CONVERSATION_LIMIT} free conversations with Sofia. Subscribe to keep learning with unlimited access.
+          </p>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/create-checkout', { method: 'POST' });
+                const data = await res.json();
+                if (data.url) window.location.href = data.url;
+              } catch (err) {
+                console.error('Checkout error:', err);
+              }
+            }}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold text-lg hover:from-purple-500 hover:to-pink-500 transition-all hover:scale-[1.02] active:scale-[0.98] mb-4"
+          >
+            Subscribe for $9.99/month
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="text-zinc-500 text-sm hover:text-zinc-300 transition-colors"
+          >
+            Back to home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col">
@@ -64,6 +111,11 @@ export default function Learn() {
           </h1>
           {dialectConfig && (
             <span className="text-sm">{dialectConfig.flag}</span>
+          )}
+          {!isSubscribed && getRemainingFree() > 0 && (
+            <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+              {getRemainingFree()} free left
+            </span>
           )}
           {lesson && (
             <span className="text-xs text-zinc-500 bg-zinc-900 px-2 py-0.5 rounded-full">

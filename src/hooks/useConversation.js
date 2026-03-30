@@ -48,9 +48,13 @@ export function useConversation() {
 
   const vapiRef = useRef(null);
   const timerRef = useRef(null);
+  const karaokeTimerRef = useRef(null);
+  const pendingKaraokeRef = useRef(null); // words waiting for speech-start
   const pendingLessonRef = useRef(null);
 
   const stopKaraoke = useCallback(() => {
+    if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
+    pendingKaraokeRef.current = null;
     setKaraokeWords([]);
     setKaraokeIndex(-1);
   }, []);
@@ -97,12 +101,33 @@ export function useConversation() {
       setIsSpeaking(true);
       setIsListening(false);
       setIsThinking(false);
+
+      // START karaoke when speech actually begins
+      const words = pendingKaraokeRef.current;
+      if (words && words.length > 0) {
+        if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
+        let idx = 0;
+        setKaraokeIndex(0);
+        // ~280ms per word — tuned for ElevenLabs Spanish speech rate
+        const msPerWord = Math.max(180, 280);
+        karaokeTimerRef.current = setInterval(() => {
+          idx++;
+          if (idx >= words.length) {
+            clearInterval(karaokeTimerRef.current);
+            setKaraokeIndex(words.length);
+          } else {
+            setKaraokeIndex(idx);
+          }
+        }, msPerWord);
+        pendingKaraokeRef.current = null;
+      }
     });
 
     vapi.on('speech-end', () => {
       setIsSpeaking(false);
       setIsListening(true);
-      // When speech ends, reveal all remaining karaoke words
+      // Reveal all remaining karaoke words
+      if (karaokeTimerRef.current) clearInterval(karaokeTimerRef.current);
       setKaraokeIndex(prev => prev >= 0 ? 999 : prev);
     });
 
@@ -119,24 +144,14 @@ export function useConversation() {
         const lastMsg = convo[convo.length - 1];
         if (lastMsg?.role === 'assistant' && lastMsg?.content) {
           const spanishText = lastMsg.content;
-          // Show subtitle immediately (before speech starts)
+          // Show subtitle immediately (all dimmed, waiting for speech)
           const words = spanishText.trim().split(/\s+/);
           setKaraokeWords(words);
-          setKaraokeIndex(0); // Start revealing from first word
+          setKaraokeIndex(-1); // All dimmed — karaoke starts on speech-start
           setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
 
-          // Start karaoke timer — reveal words gradually
-          let idx = 0;
-          const msPerWord = Math.max(120, (words.length * 250) / words.length);
-          const timer = setInterval(() => {
-            idx++;
-            if (idx >= words.length) {
-              clearInterval(timer);
-              setKaraokeIndex(words.length);
-            } else {
-              setKaraokeIndex(idx);
-            }
-          }, msPerWord);
+          // Store words for speech-start to pick up
+          pendingKaraokeRef.current = words;
 
           // Add to message history (avoid duplicates)
           setMessages(prev => {
