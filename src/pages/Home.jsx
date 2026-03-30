@@ -224,12 +224,39 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Pricing Teaser ── */}
-      <section className="text-center py-20 border-t border-zinc-900">
-        <p className="text-zinc-400 text-lg">
-          Free during beta.{' '}
-          <span className="text-zinc-500">$9.99/mo coming soon.</span>
-        </p>
+      {/* ── Pricing ── */}
+      <section className="max-w-md mx-auto px-6 py-24 border-t border-zinc-900">
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 text-center">
+          <p className="text-sm text-purple-400 font-medium tracking-wider uppercase mb-2">AgentVoz Pro</p>
+          <div className="flex items-baseline justify-center gap-1 mb-2">
+            <span className="text-5xl font-bold text-white">$9.99</span>
+            <span className="text-zinc-500 text-lg">/month</span>
+          </div>
+          <p className="text-zinc-400 text-sm mb-6">Unlimited conversations with Sofia. Cancel anytime.</p>
+          <ul className="text-left text-sm text-zinc-400 space-y-2 mb-8">
+            {['Unlimited AI conversations', '4 Spanish dialects', '18 structured lessons', 'Real-time subtitles & translation', 'Speed control', 'New lessons added weekly'].map(f => (
+              <li key={f} className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                {f}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/create-checkout', { method: 'POST' });
+                const data = await res.json();
+                if (data.url) window.location.href = data.url;
+              } catch (err) {
+                console.error('Checkout error:', err);
+              }
+            }}
+            className="w-full py-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold text-lg hover:from-purple-500 hover:to-pink-500 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Subscribe Now
+          </button>
+          <p className="text-zinc-600 text-xs mt-3">Try free first. Subscribe when you're ready.</p>
+        </div>
       </section>
 
       {/* ── Footer ── */}

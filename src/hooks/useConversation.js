@@ -106,51 +106,109 @@ export function useConversation() {
       setKaraokeIndex(prev => prev >= 0 ? 999 : prev);
     });
 
-    // Transcripts — use partial for real-time karaoke, final for messages
+    // Listen for ALL message types to capture LLM text BEFORE speech
     vapi.on('message', (msg) => {
-      if (msg.type === 'transcript') {
-        // ASSISTANT partial — real-time subtitle as she speaks
-        if (msg.role === 'assistant' && msg.transcriptType === 'partial') {
-          const partialText = msg.transcript;
-          if (partialText && partialText.trim()) {
-            // Show words as they come in (karaoke effect)
-            const words = partialText.trim().split(/\s+/);
-            setKaraokeWords(words);
-            setKaraokeIndex(words.length - 1); // Reveal all current words
-            setCurrentSubtitles(prev => ({
-              spanish: partialText,
-              english: prev?.english || '',
-            }));
-          }
-        }
+      // Log all message types for debugging (remove later)
+      if (msg.type !== 'transcript') {
+        console.log('VAPI msg:', msg.type, msg);
+      }
 
-        // ASSISTANT final — complete message, trigger translation
-        if (msg.role === 'assistant' && msg.transcriptType === 'final') {
-          const spanishText = msg.transcript;
-          if (spanishText && spanishText.trim().length > 1) {
-            // Show full text
-            const words = spanishText.trim().split(/\s+/);
-            setKaraokeWords(words);
-            setKaraokeIndex(words.length); // All revealed
+      // Conversation update — fires BEFORE TTS, contains LLM response text
+      if (msg.type === 'conversation-update') {
+        const convo = msg.conversation || [];
+        const lastMsg = convo[convo.length - 1];
+        if (lastMsg?.role === 'assistant' && lastMsg?.content) {
+          const spanishText = lastMsg.content;
+          // Show subtitle immediately (before speech starts)
+          const words = spanishText.trim().split(/\s+/);
+          setKaraokeWords(words);
+          setKaraokeIndex(0); // Start revealing from first word
+          setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
 
-            setCurrentSubtitles({ spanish: spanishText, english: 'Translating...' });
+          // Start karaoke timer — reveal words gradually
+          let idx = 0;
+          const msPerWord = Math.max(120, (words.length * 250) / words.length);
+          const timer = setInterval(() => {
+            idx++;
+            if (idx >= words.length) {
+              clearInterval(timer);
+              setKaraokeIndex(words.length);
+            } else {
+              setKaraokeIndex(idx);
+            }
+          }, msPerWord);
 
-            // Add to message history
-            setMessages(prev => [...prev, {
+          // Add to message history (avoid duplicates)
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last?.role === 'assistant' && last?.spanish === spanishText) return prev;
+            return [...prev, {
               role: 'assistant',
               content: spanishText,
               spanish: spanishText,
               english: null,
-            }]);
+            }];
+          });
 
-            // Translate
-            translateText(spanishText).then(english => {
-              setCurrentSubtitles(prev =>
-                prev?.spanish === spanishText ? { ...prev, english } : prev
-              );
-              setMessages(prev => prev.map(m =>
-                m.spanish === spanishText && !m.english ? { ...m, english } : m
-              ));
+          // Translate async
+          translateText(spanishText).then(english => {
+            setCurrentSubtitles(prev =>
+              prev?.spanish === spanishText ? { ...prev, english } : prev
+            );
+            setMessages(prev => prev.map(m =>
+              m.spanish === spanishText && !m.english ? { ...m, english } : m
+            ));
+          });
+        }
+      }
+
+      // Transcript — fallback for subtitles if conversation-update doesn't fire
+      if (msg.type === 'transcript') {
+        // ASSISTANT partial — real-time subtitle update
+        if (msg.role === 'assistant' && msg.transcriptType === 'partial') {
+          const partialText = msg.transcript;
+          if (partialText && partialText.trim()) {
+            setCurrentSubtitles(prev => {
+              // Only update if we don't already have LLM text showing
+              if (prev?.spanish && prev.spanish.length > partialText.length) return prev;
+              return { spanish: partialText, english: prev?.english || '' };
+            });
+          }
+        }
+
+        // ASSISTANT final — ensure we have the complete text
+        if (msg.role === 'assistant' && msg.transcriptType === 'final') {
+          const spanishText = msg.transcript;
+          if (spanishText && spanishText.trim().length > 1) {
+            // Only add to messages if conversation-update didn't already
+            setMessages(prev => {
+              const last = prev[prev.length - 1];
+              if (last?.role === 'assistant') return prev; // Already captured
+              return [...prev, {
+                role: 'assistant',
+                content: spanishText,
+                spanish: spanishText,
+                english: null,
+              }];
+            });
+
+            // Reveal all karaoke words
+            const words = spanishText.trim().split(/\s+/);
+            setKaraokeWords(words);
+            setKaraokeIndex(words.length);
+
+            // Translate if not already done
+            setCurrentSubtitles(prev => {
+              if (prev?.english && prev.english !== 'Translating...') return prev;
+              translateText(spanishText).then(english => {
+                setCurrentSubtitles(p =>
+                  p?.spanish === spanishText ? { ...p, english } : p
+                );
+                setMessages(p => p.map(m =>
+                  m.spanish === spanishText && !m.english ? { ...m, english } : m
+                ));
+              });
+              return { spanish: spanishText, english: prev?.english || 'Translating...' };
             });
           }
         }
