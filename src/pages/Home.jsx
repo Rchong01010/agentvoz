@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CONFIG } from '../lib/config';
+import StreakBadge from '../components/StreakBadge';
+import VocabProgress from '../components/VocabProgress';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -73,6 +75,14 @@ export default function Home() {
           Join <span className="text-zinc-300 font-medium">500+ learners</span> practicing with Sofia
         </p>
       </div>
+
+      {/* ── Your Progress ── */}
+      <section className="max-w-5xl mx-auto px-6 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+          <StreakBadge />
+          <VocabProgress />
+        </div>
+      </section>
 
       {/* ── Feature Highlights ── */}
       <section className="max-w-5xl mx-auto px-6 py-24">

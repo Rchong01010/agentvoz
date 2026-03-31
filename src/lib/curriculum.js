@@ -63,9 +63,24 @@ export const LESSONS = [
     title: 'Hello & Your Name',
     description: 'Learn to greet someone and introduce yourself',
     vocabTargets: ['hola', 'me llamo', 'mucho gusto', 'adiós'],
+    phases: [
+      { name: 'Listen & Repeat', description: 'Sofia says it, you repeat' },
+      { name: 'Guided Response', description: 'Choose from options Sofia gives you' },
+      { name: 'Free Response', description: 'Try saying it on your own with hints' },
+    ],
     systemPromptAddition: `
 LESSON INSTRUCTIONS — "Hello & Your Name"
 You are teaching a TOTAL BEGINNER. Speak 90% English, 10% Spanish.
+
+GRADUATED SPEAKING APPROACH:
+PHASE 1 (first 2-3 exchanges): LISTEN AND REPEAT
+- Say a word in Spanish, translate it, ask them to repeat: "Can you say 'hola' back to me?"
+- Celebrate ANY attempt: "Great job!"
+PHASE 2 (next 2-3 exchanges): GUIDED CHOICE
+- Ask a question and give 2 options: "When someone says hola, you can say 'hola' or 'buenos dias'. Which one do you want to try?"
+PHASE 3 (remaining): PROMPTED FREE RESPONSE
+- Give just a hint: "Now greet me like we just met. Start with 'hola'..."
+- If they struggle, give the full phrase to repeat.
 
 TEACH THESE PHRASES (in this order):
 1. "hola" (hello) — have them repeat it

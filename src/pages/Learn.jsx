@@ -4,9 +4,13 @@ import { useConversation } from '../hooks/useConversation';
 import Avatar from '../components/Avatar';
 import Subtitles from '../components/Subtitles';
 import ChatHistory from '../components/ChatHistory';
+import SessionReview from '../components/SessionReview';
 import { CONFIG } from '../lib/config';
 import { getLesson } from '../lib/curriculum';
 import { hasFreeTrial, incrementConversation, getRemainingFree, FREE_CONVERSATION_LIMIT } from '../lib/freeTrial';
+import { recordActivity } from '../lib/streaks';
+import { addHeardWords, addProducedWords } from '../lib/vocabulary';
+import { completeLesson } from '../lib/progress';
 
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
@@ -27,6 +31,7 @@ export default function Learn() {
   const lesson = lessonId ? getLesson(lessonId) : null;
   const isSubscribed = searchParams.get('subscribed') === 'true';
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   const {
     messages,
@@ -54,13 +59,21 @@ export default function Learn() {
 
     if (callState === 'idle' && !started) {
       incrementConversation();
+      recordActivity(); // Track streak
       startConversation(level, theme, dialectParam, speedParam, lessonId);
     }
   }, []);
 
   const handleEnd = () => {
+    // Track vocab from conversation
+    messages.forEach(m => {
+      if (m.role === 'assistant' && m.spanish) addHeardWords(m.spanish);
+      if (m.role === 'user' && m.content) addProducedWords(m.content);
+    });
+    // Mark lesson complete if applicable
+    if (lessonId) completeLesson(lessonId);
     stopConversation();
-    navigate('/');
+    setShowReview(true);
   };
 
   // Paywall screen
@@ -97,6 +110,22 @@ export default function Learn() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  // Session review overlay
+  if (showReview) {
+    return (
+      <SessionReview
+        messages={messages}
+        duration={duration}
+        lessonId={lessonId}
+        onClose={() => navigate('/')}
+        onStartNew={() => {
+          setShowReview(false);
+          window.location.reload();
+        }}
+      />
     );
   }
 
