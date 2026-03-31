@@ -2,15 +2,33 @@ import Groq from 'groq-sdk';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Rate limiting
+const rateMap = new Map();
+const RATE_LIMIT = 30;
+const RATE_WINDOW = 60_000;
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Rate limit
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
+  const now = Date.now();
+  const entry = rateMap.get(ip) || { count: 0, reset: now + RATE_WINDOW };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + RATE_WINDOW; }
+  entry.count++;
+  rateMap.set(ip, entry);
+  if (entry.count > RATE_LIMIT) return res.status(429).json({ error: 'Too many requests' });
+
   const { text } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: 'Missing text' });
+  }
+
+  if (text.length > 1000) {
+    return res.status(400).json({ error: 'Text too long (max 1000 chars)' });
   }
 
   try {

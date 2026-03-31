@@ -25,12 +25,14 @@ export default async function handler(req, res) {
 
   let event;
   try {
-    if (endpointSecret && sig) {
-      event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
-    } else {
-      // Fallback: parse without signature verification (dev only)
-      event = JSON.parse(buf.toString());
+    if (!endpointSecret) {
+      console.error('STRIPE_WEBHOOK_SECRET not configured — rejecting webhook');
+      return res.status(500).json({ error: 'Webhook not configured' });
     }
+    if (!sig) {
+      return res.status(400).json({ error: 'Missing stripe-signature header' });
+    }
+    event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).json({ error: 'Webhook signature verification failed' });
