@@ -7,10 +7,27 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(), geolocation=()" },
-        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" }
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(self), geolocation=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.vapi.ai wss://*.vapi.ai https://*.supabase.co https://api.groq.com; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+        }
       ]
     }
+  ],
+  "redirects": [
+    { "source": "/.env", "destination": "/404", "statusCode": 404 },
+    { "source": "/.env:path*", "destination": "/404", "statusCode": 404 },
+    { "source": "/.git/:path*", "destination": "/404", "statusCode": 404 },
+    { "source": "/.aws/:path*", "destination": "/404", "statusCode": 404 },
+    { "source": "/.ssh/:path*", "destination": "/404", "statusCode": 404 },
+    { "source": "/wp-admin/:path*", "destination": "/404", "statusCode": 404 },
+    { "source": "/wp-login.php", "destination": "/404", "statusCode": 404 },
+    { "source": "/.htaccess", "destination": "/404", "statusCode": 404 },
+    { "source": "/.htpasswd", "destination": "/404", "statusCode": 404 },
+    { "source": "/.npmrc", "destination": "/404", "statusCode": 404 },
+    { "source": "/.DS_Store", "destination": "/404", "statusCode": 404 }
   ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }

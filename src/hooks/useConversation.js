@@ -6,7 +6,7 @@ import ASSISTANTS from '../lib/assistants.json';
 
 const Vapi = VapiModule.default || VapiModule;
 
-const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || '7b4daf13-8ad4-4f82-892a-60292ef9b476';
+const VAPI_PUBLIC_KEY = import.meta.env.VITE_VAPI_PUBLIC_KEY || null;
 
 // Base system prompt — dialect hint gets appended
 const BASE_SYSTEM_PROMPT = `You are Sofia, a warm and encouraging AI Spanish language tutor on AgentVoz.
@@ -61,6 +61,9 @@ export function useConversation() {
 
   const getVapi = useCallback(() => {
     if (vapiRef.current) return vapiRef.current;
+    if (!VAPI_PUBLIC_KEY) {
+      throw new Error('Voice features unavailable — VAPI key not configured.');
+    }
     const vapi = new Vapi(VAPI_PUBLIC_KEY);
     vapiRef.current = vapi;
 

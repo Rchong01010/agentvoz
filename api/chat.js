@@ -35,12 +35,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Message too long (max 2000 chars)' });
   }
 
+  // Strip system messages — only the server defines the system prompt
+  const userMessages = messages.filter(m => m.role !== 'system');
+
   try {
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...messages,
+        ...userMessages,
       ],
       temperature: 0.8,
       max_tokens: 300,
