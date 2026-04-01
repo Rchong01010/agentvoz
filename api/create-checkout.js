@@ -4,7 +4,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const ALLOWED_ORIGINS = ['https://agentvoz.vercel.app', 'https://agentvoz.com', 'http://localhost:5173'];
 const DEFAULT_ORIGIN = 'https://agentvoz.com';
 
-// Rate limiting
+// Rate limiting (in-memory, per-instance).
+// LIMITATION: Resets on Vercel cold starts. Acceptable for abuse prevention;
+// for strict enforcement, upgrade to Vercel KV or Upstash Redis.
 const rateMap = new Map();
 const RATE_LIMIT = 10;
 const RATE_WINDOW = 60_000;

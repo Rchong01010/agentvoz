@@ -5,7 +5,9 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 // Server-defined system prompt — never accept from client
 const SYSTEM_PROMPT = `You are Sofia, a warm and encouraging Spanish language tutor. Help the student practice conversational Spanish. Respond primarily in Spanish with occasional English explanations when needed. Keep responses concise and conversational. Always return valid JSON with "response" (your message) and "translation" (English translation) fields.`;
 
-// Rate limiting
+// Rate limiting (in-memory, per-instance).
+// LIMITATION: Resets on Vercel cold starts. Acceptable for abuse prevention;
+// for strict enforcement, upgrade to Vercel KV or Upstash Redis.
 const rateMap = new Map();
 const RATE_LIMIT = 30;
 const RATE_WINDOW = 60_000;

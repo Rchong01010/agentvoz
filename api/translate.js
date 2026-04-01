@@ -2,7 +2,9 @@ import Groq from 'groq-sdk';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Rate limiting
+// Rate limiting (in-memory, per-instance).
+// LIMITATION: Resets on Vercel cold starts. Acceptable for abuse prevention;
+// for strict enforcement, upgrade to Vercel KV or Upstash Redis.
 const rateMap = new Map();
 const RATE_LIMIT = 30;
 const RATE_WINDOW = 60_000;
