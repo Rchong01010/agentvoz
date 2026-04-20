@@ -6,3 +6,8 @@ dist/
 .env*.local
 *.log
 .vercel
+
+# Backup env files (security: never commit)
+.env.bak
+.env.save
+.env.*
